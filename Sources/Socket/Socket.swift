@@ -2711,6 +2711,100 @@ public class Socket: SocketReader, SocketWriter {
         self.signature?.address = signature.address
     }
 
+    ///
+    /// Bind on a path, limiting the maximum number of pending connections. For use with unix datagram sockets
+    ///
+    /// - Parameters:
+    ///        - path:                 The path to listen on.
+    ///     - maxBacklogSize:         The maximum size of the queue containing pending connections. Default is *Socket.SOCKET_DEFAULT_MAX_BACKLOG*.
+    ///
+    public func bind(on path: String, maxBacklogSize: Int = Socket.SOCKET_DEFAULT_MAX_BACKLOG) throws {
+
+        // Make sure we've got a valid socket...
+        if self.socketfd == Socket.SOCKET_INVALID_DESCRIPTOR {
+
+            throw Error(code: Socket.SOCKET_ERR_BAD_DESCRIPTOR, reason: "Socket has an invalid descriptor")
+        }
+
+        // Make sure this is a UNIX socket...
+        guard let sockSig = self.signature, sockSig.protocolFamily == .unix else {
+
+            throw Error(code: Socket.SOCKET_ERR_WRONG_PROTOCOL, reason: "Socket has the wrong protocol, it must be a UNIX socket")
+        }
+
+        // Set a flag so that this address can be re-used immediately after the connection
+        // closes.  (TCP normally imposes a delay before an address can be re-used.)
+        var on: Int32 = 1
+        #if os(Windows)
+        try withUnsafePointer(to: &on) { on_ptr in
+            try on_ptr.withMemoryRebound(to: Int8.self, capacity: 1) { int8_on_ptr in
+                if setsockopt(SOCKET(self.socketfd), SOL_SOCKET, SO_REUSEADDR, int8_on_ptr, socklen_t(MemoryLayout<Int32>.size)) < 0 {
+
+                    throw Error(code: Socket.SOCKET_ERR_SETSOCKOPT_FAILED, reason: self.lastError())
+                }
+            }
+        }
+        #else
+        if setsockopt(self.socketfd, SOL_SOCKET, SO_REUSEADDR, &on, socklen_t(MemoryLayout<Int32>.size)) < 0 {
+
+            throw Error(code: Socket.SOCKET_ERR_SETSOCKOPT_FAILED, reason: self.lastError())
+        }
+        #endif
+        // Create the signature...
+        let sig = try Signature(socketType: .datagram, proto: .unix, path: path)
+        guard let signature = sig else {
+
+            throw Error(code:Socket.SOCKET_ERR_BAD_SIGNATURE_PARAMETERS, reason: "Socket contains invalid signature parameters")
+        }
+
+        // Ensure the path doesn't exist...
+        #if os(Linux)
+            _ = Glibc.unlink(path)
+        #elseif os(Windows)
+            _ = WinSDK._unlink(path)
+        #else
+            _ = Darwin.unlink(path)
+        #endif
+
+        // Try to bind the socket to the address...
+        // Now, do the connection using the supplied address from the signature...
+        let (addrPtr, addrLen) = try signature.unixAddress()
+        defer {
+            #if swift(>=4.1)
+                addrPtr.deallocate()
+            #else
+                addrPtr.deallocate(capacity: addrLen)
+            #endif
+        }
+
+        let rc = addrPtr.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+
+            (p: UnsafeMutablePointer<sockaddr>) -> Int32 in
+
+            #if os(Linux)
+                return Glibc.bind(self.socketfd, p, socklen_t(addrLen))
+            #elseif os(Windows)
+                return WinSDK.bind(SOCKET(self.socketfd), p, socklen_t(addrLen))
+            #else
+                return Darwin.bind(self.socketfd, p, socklen_t(addrLen))
+            #endif
+        }
+
+        if rc < 0 {
+
+            throw Error(code: Socket.SOCKET_ERR_LISTEN_FAILED, reason: self.lastError())
+        }
+
+        if self.signature?.socketType == .datagram {
+            isConnected = true
+        }
+        self.isListening = true
+        self.signature?.path = path
+        self.signature?.isBound = true
+        self.signature?.isSecure = false
+        self.signature?.address = signature.address
+    }
+
     // MARK: --- UDP
 
     ///
