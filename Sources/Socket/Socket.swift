@@ -1769,8 +1769,10 @@ public class Socket: SocketReader, SocketWriter {
     ///        - familyOnly:    Setting this to `true` will only connect to a socket of the family of the
     ///                        current instance of *Socket*.  Setting it to `false`, will allow connection
     ///                        to foreign sockets of a different family.  Default is *false*.
+	///        - numericHost   hostname treated as a numeric string defining an IPv4 or IPv6address
+	///      				   and no name resolution will be attempted.
     ///
-    public func connect(to host: String, port: Int32, timeout: UInt = 0, familyOnly: Bool = false) throws {
+	public func connect(to host: String, port: Int32, timeout: UInt = 0, familyOnly: Bool = false, numericHost: Bool = false) throws {
 
         // The socket must've been created and must not be connected...
         if self.socketfd == Socket.SOCKET_INVALID_DESCRIPTOR {
@@ -1817,7 +1819,7 @@ public class Socket: SocketReader, SocketWriter {
         let socketType: SocketType = signature?.socketType ?? .stream
         #if os(Linux)
             var hints = addrinfo(
-                ai_flags: AI_PASSIVE,
+				ai_flags: numericHost ? AI_NUMERICHOST | AI_PASSIVE : AI_PASSIVE,
                 ai_family: familyOnly ? signature?.protocolFamily.value ?? AF_UNSPEC : AF_UNSPEC,
                 ai_socktype: socketType.value,
                 ai_protocol: 0,
@@ -1827,7 +1829,7 @@ public class Socket: SocketReader, SocketWriter {
                 ai_next: nil)
         #else
             var hints = addrinfo(
-                ai_flags: AI_PASSIVE,
+				ai_flags: numericHost ? AI_NUMERICHOST | AI_PASSIVE : AI_PASSIVE,
                 ai_family: familyOnly ? signature?.protocolFamily.value ?? AF_UNSPEC : AF_UNSPEC,
                 ai_socktype: socketType.value,
                 ai_protocol: 0,
