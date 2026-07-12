@@ -156,9 +156,9 @@ let fd_set_size = 64
 extension fd_set {
 
     @inline(__always)
-    mutating func withCArrayAccess<T>(block: (UnsafeMutablePointer<Int32>) throws -> T) rethrows -> T {
+    mutating func withCArrayAccess<T>(block: (UnsafeMutablePointer<UInt64>) throws -> T) rethrows -> T {
         return try withUnsafeMutablePointer(to: &fd_array) {
-            try block(UnsafeMutableRawPointer($0).assumingMemoryBound(to: Int32.self))
+            try block(UnsafeMutableRawPointer($0).assumingMemoryBound(to: UInt64.self))
         }
     }
 }
@@ -208,12 +208,12 @@ extension fd_set {
         var index = 0
         withCArrayAccess { arrayPtr in
             for _ in 0..<Int(local_fd_count) {
-                if arrayPtr[index] == fd {  break }
+                if arrayPtr[index] == SOCKET(fd) {  break }
                 index += 1
             }
             if index == local_fd_count {
                 if local_fd_count < fd_set_size {
-                    arrayPtr[index] = fd
+                    arrayPtr[index] = SOCKET(fd)
                     local_fd_count += 1
                 }
             }
@@ -232,7 +232,7 @@ extension fd_set {
         var local_fd_count = fd_count
         withCArrayAccess { arrayPtr in
             for var i in 0..<Int(local_fd_count) {
-                if arrayPtr[i] == fd {
+                if arrayPtr[i] == SOCKET(fd) {
                     //print("clear found at index \(i)")
                     while i < fd_set_size - 1 {
                         arrayPtr[i] =  arrayPtr[i + 1]
@@ -258,7 +258,7 @@ extension fd_set {
         let local_fd_count = fd_count
         return withCArrayAccess { arrayPtr in
             for i in 0..<Int(local_fd_count) {
-                if arrayPtr[i] == fd {
+                if arrayPtr[i] == SOCKET(fd) {
                     return true
                 }
             }
