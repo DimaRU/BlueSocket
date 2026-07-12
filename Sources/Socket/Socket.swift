@@ -4218,14 +4218,38 @@ public class Socket: SocketReader, SocketWriter {
         Socket.lastError()
     }
 
+    #if os(Windows)
+    private class func lastError() -> String {
+        let errorCode = DWORD(WSAGetLastError())
+
+        var buffer = [WCHAR](repeating: 0, count: 1024)
+
+        let length = buffer.withUnsafeMutableBufferPointer {
+            FormatMessageW(
+                DWORD(FORMAT_MESSAGE_FROM_SYSTEM |
+                    FORMAT_MESSAGE_IGNORE_INSERTS),
+                nil,
+                errorCode,
+                0,
+                $0.baseAddress,
+                DWORD($0.count),
+                nil
+            )
+        }
+
+        guard length != 0 else {
+            return "Unknown WinSock error (\(errorCode))"
+        }
+
+        let message = String(decoding: buffer.prefix(Int(length)), as: UTF16.self)
+        return message.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+    }
+    #else
+
     private class func lastError() -> String {
         var err: Int32 = 0
         let s = String.init(unsafeUninitializedCapacity: 512) { buffer in
-            #if os(Windows)
-            err = WinSDK.strerror_s(buffer.baseAddress, buffer.count, WSAGetLastError())
-            #else
             err = strerror_r(errno, buffer.baseAddress, buffer.count)
-            #endif
             if err == 0 {
                 return strlen(buffer.baseAddress!)
             } else {
@@ -4237,6 +4261,7 @@ public class Socket: SocketReader, SocketWriter {
         }
         return "Error: \(err)"
     }
+    #endif
 
     private func getErrno() -> Int32 {
         #if os(Windows)
