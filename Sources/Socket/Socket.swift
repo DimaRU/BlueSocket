@@ -1292,7 +1292,7 @@ public class Socket: SocketReader, SocketWriter {
         }
 
         // Issue the select...
-        var count: Int32 = 0
+        let count: Int32
         if waitForever {
             count = select(highSocketfd + Int32(1), &readfds, nil, nil, nil)
         } else {
@@ -1301,7 +1301,7 @@ public class Socket: SocketReader, SocketWriter {
 
         // A count of less than zero indicates select failed...
         if count < 0 {
-            throw Error(code: Socket.SOCKET_ERR_SELECT_FAILED, reason: String(validatingUTF8: strerror(errno)) ?? "Error: \(errno)")
+            throw Error(code: Socket.SOCKET_ERR_SELECT_FAILED, reason: Socket.lastError())
         }
 
         // A count equal zero, indicates we timed out...
@@ -1568,7 +1568,7 @@ public class Socket: SocketReader, SocketWriter {
                     if fd < 0 {
                         
                         // The operation was interrupted, continue the loop...
-                        if errno == EINTR {
+                        if getErrno() == EINTR {
                             throw OperationInterrupted.accept
                         }
                         
@@ -1683,7 +1683,7 @@ public class Socket: SocketReader, SocketWriter {
                     if fd < 0 {
                         
                         // The operation was interrupted, continue the loop...
-                        if errno == EINTR {
+                        if getErrno() == EINTR {
                             throw OperationInterrupted.accept
                         }
                         
@@ -1769,10 +1769,10 @@ public class Socket: SocketReader, SocketWriter {
     ///        - familyOnly:    Setting this to `true` will only connect to a socket of the family of the
     ///                        current instance of *Socket*.  Setting it to `false`, will allow connection
     ///                        to foreign sockets of a different family.  Default is *false*.
-	///        - numericHost   hostname treated as a numeric string defining an IPv4 or IPv6address
-	///      				   and no name resolution will be attempted.
+    ///        - numericHost   hostname treated as a numeric string defining an IPv4 or IPv6address
+    ///                         and no name resolution will be attempted.
     ///
-	public func connect(to host: String, port: Int32, timeout: UInt = 0, familyOnly: Bool = false, numericHost: Bool = false) throws {
+    public func connect(to host: String, port: Int32, timeout: UInt = 0, familyOnly: Bool = false, numericHost: Bool = false) throws {
 
         // The socket must've been created and must not be connected...
         if self.socketfd == Socket.SOCKET_INVALID_DESCRIPTOR {
@@ -1819,7 +1819,7 @@ public class Socket: SocketReader, SocketWriter {
         let socketType: SocketType = signature?.socketType ?? .stream
         #if os(Linux)
             var hints = addrinfo(
-				ai_flags: numericHost ? AI_NUMERICHOST | AI_PASSIVE : AI_PASSIVE,
+                ai_flags: numericHost ? AI_NUMERICHOST | AI_PASSIVE : AI_PASSIVE,
                 ai_family: familyOnly ? signature?.protocolFamily.value ?? AF_UNSPEC : AF_UNSPEC,
                 ai_socktype: socketType.value,
                 ai_protocol: 0,
@@ -1829,7 +1829,7 @@ public class Socket: SocketReader, SocketWriter {
                 ai_next: nil)
         #else
             var hints = addrinfo(
-				ai_flags: numericHost ? AI_NUMERICHOST | AI_PASSIVE : AI_PASSIVE,
+                ai_flags: numericHost ? AI_NUMERICHOST | AI_PASSIVE : AI_PASSIVE,
                 ai_family: familyOnly ? signature?.protocolFamily.value ?? AF_UNSPEC : AF_UNSPEC,
                 ai_socktype: socketType.value,
                 ai_protocol: 0,
@@ -1849,14 +1849,14 @@ public class Socket: SocketReader, SocketWriter {
             #if os(Windows)
             // TBD EAI_FAIL vs EAI_FAIL vs EAI_SYSTEM
             if status == EAI_FAIL {
-                errorString = String(validatingUTF8: strerror(errno)) ?? "Unknown error code."
+                errorString = lastError()
             } else {
                 errorString = String(validatingUTF8: gai_strerrorA(status)) ?? "Unknown error code."
             }
             throw Error(code: Socket.SOCKET_ERR_GETADDRINFO_FAILED, reason: errorString)
             #else
             if status == EAI_SYSTEM {
-                errorString = String(validatingUTF8: strerror(errno)) ?? "Unknown error code."
+                errorString = lastError()
             } else {
                 errorString = String(validatingUTF8: gai_strerror(status)) ?? "Unknown error code."
             }
@@ -1951,7 +1951,7 @@ public class Socket: SocketReader, SocketWriter {
             }
             
             // If this is a non-blocking socket, check errno for EINPROGRESS and if set we've got a timeout, wait the appropriate time...
-            if errno == EINPROGRESS {
+            if getErrno() == EINPROGRESS {
                 
                 if timeout > 0 {
 
@@ -2366,7 +2366,7 @@ public class Socket: SocketReader, SocketWriter {
                 
                         // Setting of this option on WSL (Windows Subsytem for Linux) is not supported.  Check for
                         // the appropriate errno value and if set, ignore the error...
-                        if errno != ENOPROTOOPT {
+                        if getErrno() != ENOPROTOOPT {
                             throw Error(code: Socket.SOCKET_ERR_SETSOCKOPT_FAILED, reason: self.lastError())
                         }
                     }
@@ -2377,7 +2377,7 @@ public class Socket: SocketReader, SocketWriter {
                 
                 // Setting of this option on WSL (Windows Subsytem for Linux) is not supported.  Check for
                 // the appropriate errno value and if set, ignore the error...
-                if errno != ENOPROTOOPT {
+                if getErrno() != ENOPROTOOPT {
                     throw Error(code: Socket.SOCKET_ERR_SETSOCKOPT_FAILED, reason: self.lastError())
                 }
             }
@@ -2464,16 +2464,16 @@ public class Socket: SocketReader, SocketWriter {
             #if os(Windows)
             // TBD EAI_FAIL vs EAI_FAIL vs EAI_SYSTEM
             if status == EAI_FAIL {
-                errorString = String(validatingUTF8: strerror(errno)) ?? "Unknown error code."
+                errorString = lastError()
             } else {
-                errorString = String(validatingUTF8: gai_strerrorA(errno)) ?? "Unknown error code."
+                errorString = String(validatingUTF8: gai_strerrorA(getErrno())) ?? "Unknown error code."
             }
             throw Error(code: Socket.SOCKET_ERR_GETADDRINFO_FAILED, reason: errorString)
             #else
             if status == EAI_SYSTEM {
-                errorString = String(validatingUTF8: strerror(errno)) ?? "Unknown error code."
+                errorString = lastError()
             } else {
-                errorString = String(validatingUTF8: gai_strerror(errno)) ?? "Unknown error code."
+                errorString = String(validatingUTF8: gai_strerror(getErrno())) ?? "Unknown error code."
             }
             throw Error(code: Socket.SOCKET_ERR_GETADDRINFO_FAILED, reason: errorString)
             #endif
@@ -3408,14 +3408,14 @@ public class Socket: SocketReader, SocketWriter {
             }
             if s <= 0 {
 
-                if errno == EAGAIN && !isBlocking {
+                if getErrno() == EAGAIN && !isBlocking {
 
                     // We have written out as much as we can...
                     return sent
                 }
 
                 // - Handle a connection reset by peer (ECONNRESET) and throw a different exception...
-                if errno == ECONNRESET {
+                if getErrno() == ECONNRESET {
                     self.remoteConnectionClosed = true
                     throw Error(code: Socket.SOCKET_ERR_CONNECTION_RESET, reason: self.lastError())
                 }
@@ -3547,14 +3547,14 @@ public class Socket: SocketReader, SocketWriter {
                 
                 if s <= 0 {
                     
-                    if errno == EAGAIN && !isBlocking {
+                    if getErrno() == EAGAIN && !isBlocking {
                         
                         // We have written out as much as we can...
                         return sent
                     }
                     
                     // - Handle a connection reset by peer (ECONNRESET) and throw a different exception...
-                    if errno == ECONNRESET {
+                    if getErrno() == ECONNRESET {
                         self.remoteConnectionClosed = true
                         throw Error(code: Socket.SOCKET_ERR_CONNECTION_RESET, reason: self.lastError())
                     }
@@ -4061,7 +4061,7 @@ public class Socket: SocketReader, SocketWriter {
             // Check for error...
             if count < 0 {
 
-                switch errno {
+                switch getErrno() {
 
                 // - Could be an error, but if errno is EAGAIN or EWOULDBLOCK (if a non-blocking socket),
                 //    it means there was NO data to read...
@@ -4141,19 +4141,21 @@ public class Socket: SocketReader, SocketWriter {
                     
                     // - Could be an error, but if errno is EAGAIN or EWOULDBLOCK (if a non-blocking socket),
                     //        it means there was NO data to read...
-                    if errno == EAGAIN || errno == EWOULDBLOCK {
 
+                    switch getErrno() {
+                        
+                    case EAGAIN, EWOULDBLOCK:
                         throw OperationInterrupted.readDatagram(length: self.readStorage.length)
-                    }
-                    
-                    // - Handle a connection reset by peer (ECONNRESET) and throw a different exception...
-                    if errno == ECONNRESET {
+                        
+                    case ECONNRESET:
+                        // - Handle a connection reset by peer (ECONNRESET) and throw a different exception...
                         self.remoteConnectionClosed = true
                         throw Error(code: Socket.SOCKET_ERR_CONNECTION_RESET, reason: self.lastError())
+                        
+                    default:
+                        // - Something went wrong...
+                        throw Error(code: Socket.SOCKET_ERR_RECV_FAILED, reason: self.lastError())
                     }
-                    
-                    // - Something went wrong...
-                    throw Error(code: Socket.SOCKET_ERR_RECV_FAILED, reason: self.lastError())
                 }
                 
                 if count == 0 {
@@ -4213,8 +4215,35 @@ public class Socket: SocketReader, SocketWriter {
     /// - Returns: String containing relevant text about the error.
     ///
     private func lastError() -> String {
+        Socket.lastError()
+    }
 
-        return String(validatingUTF8: strerror(errno)) ?? "Error: \(errno)"
+    private class func lastError() -> String {
+        var err: Int32 = 0
+        let s = String.init(unsafeUninitializedCapacity: 512) { buffer in
+            #if os(Windows)
+            err = WinSDK.strerror_s(buffer.baseAddress, buffer.count, WSAGetLastError())
+            #else
+            err = strerror_r(errno, buffer.baseAddress, buffer.count)
+            #endif
+            if err == 0 {
+                return strlen(buffer.baseAddress!)
+            } else {
+                return 0
+            }
+        }
+        guard s.isEmpty else {
+            return s
+        }
+        return "Error: \(err)"
+    }
+
+    private func getErrno() -> Int32 {
+        #if os(Windows)
+        return WSAGetLastError()
+        #else
+        return errno
+        #endif
     }
     
     ///
@@ -4399,7 +4428,7 @@ extension Socket {
             // Check for error...
             if count < 0 {
                 //print("readDataIntoStorage count < 0 \(count)")
-                switch errno {
+                switch getErrno() {
                 // - Could be an error, but if errno is EAGAIN or EWOULDBLOCK (if a non-blocking socket),
                 //    it means there was NO data to read... so continue reading until length bytes received
                 case EWOULDBLOCK, EAGAIN:

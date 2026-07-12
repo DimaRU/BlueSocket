@@ -1,4 +1,4 @@
-// swift-tools-version:5.0
+// swift-tools-version:5.10
 
 /**
  * Copyright IBM Corporation and the Kitura project authors 2017-2020
@@ -24,6 +24,7 @@ import PackageDescription
 #if os(Linux) || os(macOS) || os(iOS) || os(tvOS) || os(Windows)
 let package = Package(
     name: "GreenSocket",
+    platforms: [.macOS(.v11), .iOS(.v14), .tvOS(.v14)],
     products: [
         .library(
             name: "Socket",
