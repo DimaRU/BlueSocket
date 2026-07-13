@@ -1563,8 +1563,6 @@ public class Socket: SocketReader, SocketWriter {
                         let fd = Darwin.accept(self.socketfd, addressPointer, addressLengthPointer)
                     #endif
 
-                    //print("After accept fd: \(fd)")
-                    
                     if fd < 0 {
                         
                         // The operation was interrupted, continue the loop...
@@ -3697,7 +3695,6 @@ public class Socket: SocketReader, SocketWriter {
 
             // See if there's data on the socket...
             count = select(self.socketfd + Int32(1), &readfds, &writefds, nil, &timer)
-            print("after select count: \(count)")
         }
 
         // A count of less than zero indicates select failed...
@@ -4295,8 +4292,7 @@ public class Socket: SocketReader, SocketWriter {
         #if os(Windows)
         let winSockVersion: UInt16 = 0x0202  // WinSock 2.2
         if WinSDK.WSAStartup(winSockVersion, &wsa) != 0 {
-            print("WSAStartup Failed. Error Code : \(WSAGetLastError())")
-            throw Error(code: Socket.SOCKET_ERR_WINSOCK_INIT_ERROR, reason: "WSAStartup failed")
+            throw Error(code: Socket.SOCKET_ERR_WINSOCK_INIT_ERROR, reason: lastError())
         }
         #endif
     }
@@ -4354,7 +4350,6 @@ extension Socket {
         }
 
         // Read exactly length bytes...
-        //print("Read exactly \(length) bytes...")
         let count = try self.readDataIntoStorage(length: length, timeout: timeout)
         
         // Did we get data?
@@ -4403,13 +4398,9 @@ extension Socket {
         while receivedLength < length {
 
             if self.delegate == nil {
-                //print("call wait")
                 
                 let result = try Socket.wait(for: [self], timeout: timeout)
                 if result == nil {
-                    //print("*************TIMEOUT***********")
-                    // Timeout occured
-                    //return -1
                     throw ReadLengthError.timeout
                 }
                 
@@ -4420,7 +4411,6 @@ extension Socket {
                 #else
                     count = Darwin.recv(self.socketfd, self.readBuffer, length - receivedLength, recvFlags)
                 #endif
-                //print("readDataIntoStorage: \(count)")
                 receivedLength += count
             }
             else {
@@ -4452,7 +4442,6 @@ extension Socket {
             }
             // Check for error...
             if count < 0 {
-                //print("readDataIntoStorage count < 0 \(count)")
                 switch getErrno() {
                 // - Could be an error, but if errno is EAGAIN or EWOULDBLOCK (if a non-blocking socket),
                 //    it means there was NO data to read... so continue reading until length bytes received
