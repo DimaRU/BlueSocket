@@ -1843,23 +1843,17 @@ public class Socket: SocketReader, SocketWriter {
         var status: Int32 = getaddrinfo(host, String(port), &hints, &targetInfo)
         if status != 0 {
 
-            var errorString: String
+            let errorString: String
             #if os(Windows)
-            // TBD EAI_FAIL vs EAI_FAIL vs EAI_SYSTEM
-            if status == EAI_FAIL {
-                errorString = lastError()
-            } else {
-                errorString = String(validatingUTF8: gai_strerrorA(status)) ?? "Unknown error code."
-            }
-            throw Error(code: Socket.SOCKET_ERR_GETADDRINFO_FAILED, reason: errorString)
+            errorString = lastError()
             #else
             if status == EAI_SYSTEM {
                 errorString = lastError()
             } else {
                 errorString = String(validatingUTF8: gai_strerror(status)) ?? "Unknown error code."
             }
-            throw Error(code: Socket.SOCKET_ERR_GETADDRINFO_FAILED, reason: errorString)
             #endif
+            throw Error(code: Socket.SOCKET_ERR_GETADDRINFO_FAILED, reason: errorString)
         }
 
         // Defer cleanup of our target info...
@@ -1874,17 +1868,18 @@ public class Socket: SocketReader, SocketWriter {
         defer {
             // if we throw an error, be sure we clean up any dangling socket properly.
             // note that we set this variable to nil when we assign the socket to `self.socketfd`.
-            if let sock = socketDescriptor, sock != Socket.SOCKET_INVALID_DESCRIPTOR {
+            if let socketDescriptor = socketDescriptor, socketDescriptor != Socket.SOCKET_INVALID_DESCRIPTOR {
                 #if os(Linux)
-                    _ = Glibc.close(socketDescriptor!)
+                    _ = Glibc.close(socketDescriptor)
                 #elseif os(Windows)
-                    _ = WinSDK.closesocket(SOCKET(socketDescriptor!))
+                    _ = WinSDK.closesocket(SOCKET(socketDescriptor))
                 #else
-                    _ = Darwin.close(socketDescriptor!)
+                    _ = Darwin.close(socketDescriptor)
                 #endif
             }
         }
 
+        var reason = ""
         var info = targetInfo
         while info != nil {
 
@@ -2029,6 +2024,8 @@ public class Socket: SocketReader, SocketWriter {
                         throw Error(code: Socket.SOCKET_ERR_CONNECT_TIMEOUT, reason: self.lastError())
                     }
                 }
+            } else {
+                reason = lastError()
             }
 
             // Close the socket that was opened... Protocol family may have changed...
@@ -2045,17 +2042,7 @@ public class Socket: SocketReader, SocketWriter {
 
         // Throw if there is a status error...
         if status != 0 || socketDescriptor == nil {
-
-            if socketDescriptor != nil {
-                #if os(Linux)
-                    _ = Glibc.close(socketDescriptor!)
-                #elseif os(Windows)
-                    _ = WinSDK.closesocket(SOCKET(socketDescriptor!))
-                #else
-                    _ = Darwin.close(socketDescriptor!)
-                #endif
-            }
-            throw Error(code: Socket.SOCKET_ERR_GETADDRINFO_FAILED, reason: self.lastError())
+            throw Error(code: Socket.SOCKET_ERR_GETADDRINFO_FAILED, reason: reason)
         }
 
         // Close the existing socket (if open) before replacing it...
@@ -2458,23 +2445,17 @@ public class Socket: SocketReader, SocketWriter {
         let status: Int32 = getaddrinfo(node ?? nil, String(port), &hints, &targetInfo)
         if status != 0 {
 
-            var errorString: String
+            let errorString: String
             #if os(Windows)
-            // TBD EAI_FAIL vs EAI_FAIL vs EAI_SYSTEM
-            if status == EAI_FAIL {
-                errorString = lastError()
-            } else {
-                errorString = String(validatingUTF8: gai_strerrorA(getErrno())) ?? "Unknown error code."
-            }
-            throw Error(code: Socket.SOCKET_ERR_GETADDRINFO_FAILED, reason: errorString)
+            errorString = lastError()
             #else
             if status == EAI_SYSTEM {
                 errorString = lastError()
             } else {
                 errorString = String(validatingUTF8: gai_strerror(getErrno())) ?? "Unknown error code."
             }
-            throw Error(code: Socket.SOCKET_ERR_GETADDRINFO_FAILED, reason: errorString)
             #endif
+            throw Error(code: Socket.SOCKET_ERR_GETADDRINFO_FAILED, reason: errorString)
         }
 
         // Defer cleanup of our target info...
